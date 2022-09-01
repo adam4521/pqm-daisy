@@ -42,13 +42,11 @@ while running:
     pygame.display.update()
     frames = frames + 1
 
-    newtime = time.time() 
-    if int(newtime) != seconds:
-        seconds = int(newtime)
+    newtime = int(time.time())
+    if newtime != seconds:
+        seconds = newtime
         print("FPS: " + str(frames))
         frames = 0
-
-#    time.sleep(0.1)
 
 pygame.quit()
 
