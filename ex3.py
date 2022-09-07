@@ -1,5 +1,8 @@
 """Place a polygone line with the clicks of the mouse."""
 
+#ThorPy hello world tutorial : full code
+import thorpy
+
 import math
 import pygame
 import time
@@ -21,6 +24,20 @@ frames = 0
 seconds = int(time.time())
 
 
+my_button = thorpy.make_button("Hello, world!") #just a useless button
+
+menu = thorpy.Menu(my_button) #create a menu for auto events handling
+for element in menu.get_population():
+    element.surface = screen
+
+
+my_button.center() #center the element on the screen
+#my_button.set_topleft((100,100))
+#menu.play() #launch the menu
+
+
+
+
 while running:
 
     screen.fill(GRAY)
@@ -28,7 +45,8 @@ while running:
     for event in pygame.event.get():
         if event.type == QUIT or (event.type == KEYDOWN and event.key == pygame.K_q):
             running = False
-    
+        menu.react(event)
+
     points1 = []
     points2 = []
     for t in range(0, 639):
@@ -38,7 +56,9 @@ while running:
 
     pygame.draw.lines(screen, RED, False, points1, 2)
     pygame.draw.lines(screen, BLUE, False, points2, 2)
-
+    my_button.blit()
+    # my_button.update()
+    
     pygame.display.update()
     frames = frames + 1
 
@@ -47,6 +67,7 @@ while running:
         seconds = newtime
         print("FPS: " + str(frames))
         frames = 0
+
 
 pygame.quit()
 
