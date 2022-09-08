@@ -1,8 +1,4 @@
-"""Place a polygone line with the clicks of the mouse."""
-
-#ThorPy hello world tutorial : full code
 import thorpy
-
 import math
 import pygame
 import time
@@ -19,6 +15,7 @@ CONTROLS_BOX = (100,480)
 BUTTON_SIZE = (100,50) 
 
 pygame.init()
+pygame.display.set_caption('pqm-daisy')
 screen = pygame.display.set_mode(SCREEN)
 
 drawing = False
