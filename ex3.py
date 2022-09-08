@@ -14,6 +14,9 @@ BLUE = (0, 0, 255)
 GREEN = (0, 255, 0)
 GRAY = (150, 150, 150)
 SCREEN = (640,480)
+SCOPE_BOX = (540,480)
+CONTROLS_BOX = (100,480)
+BUTTON_SIZE = (100,50) 
 
 pygame.init()
 screen = pygame.display.set_mode(SCREEN)
@@ -24,15 +27,25 @@ frames = 0
 seconds = int(time.time())
 
 
-my_button = thorpy.make_button("Hello, world!") #just a useless button
+button1 = thorpy.make_button("Summary")
+button2 = thorpy.make_button("Scope")
+button3 = thorpy.make_button("FFT")
+button4 = thorpy.make_button("Options")
+button5 = thorpy.make_button("Unused")
+button6 = thorpy.make_button("Unused")
 
-menu = thorpy.Menu(my_button) #create a menu for auto events handling
+buttons = [button1, button2, button3, button4, button5, button6]
+for button in buttons:
+    button.set_size(BUTTON_SIZE)
+
+box = thorpy.Box(elements=buttons)
+
+menu = thorpy.Menu(box) #create a menu for auto events handling
 for element in menu.get_population():
     element.surface = screen
 
-
-my_button.center() #center the element on the screen
-#my_button.set_topleft((100,100))
+box.set_size(CONTROLS_BOX)
+box.set_topleft((SCREEN[0]-CONTROLS_BOX[0],0))
 #menu.play() #launch the menu
 
 
@@ -49,15 +62,15 @@ while running:
 
     points1 = []
     points2 = []
-    for t in range(0, 639):
+    for t in range(0, SCOPE_BOX[0]):
         points1.append((t, 100+int(50*math.sin(t*math.pi/180)) + 30*(random.random() - 0.5)))
         points2.append((t, 300+int(50*math.sin(t*math.pi/180)) + 30*(random.random() - 0.5)))
 
 
     pygame.draw.lines(screen, RED, False, points1, 2)
     pygame.draw.lines(screen, BLUE, False, points2, 2)
-    my_button.blit()
-    # my_button.update()
+    box.blit()
+    # button1.update()
     
     pygame.display.update()
     frames = frames + 1
