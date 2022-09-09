@@ -20,7 +20,7 @@ pygame.init()
 pygame.display.set_caption('pqm-daisy')
 screen = pygame.display.set_mode(SCREEN)
 
-strings = ['Ready.', 'This.', 'is', 'some', 'test text', '12345678']
+strings = ['Running', 'This.', 'is', 'some', 'test text', '12345678']
 
 # update text message strings, called periodically
 def set_text_strings(texts, strings):
@@ -45,7 +45,23 @@ for s in range(0,7):
     text.set_size(TEXT_SIZE)
     texts.append(text)
 
+capturing = True
+def start_stop_reaction(event):
+   global capturing
+   if capturing == True:
+       capturing = False
+       strings[0] = 'Stopped'
+   else:
+       capturing = True
+       strings[0] = 'Running'
+
+ 
 uibox = thorpy.Box(elements=[*buttons, *texts])
+
+# setup some reactions
+first_reaction = thorpy.Reaction(reacts_to=thorpy.constants.THORPY_EVENT, reac_func=start_stop_reaction, event_args={"el": buttons[0], "id": thorpy.constants.EVENT_UNPRESS})
+uibox.add_reaction(first_reaction)
+
 
 
 menu = thorpy.Menu(uibox) #create a menu for auto events handling
@@ -77,7 +93,6 @@ def to_screen_coordinates(points1, points2, points3):
     return plot1, plot2, plot3
 
 
-capturing = True
 running = True
 frames = 0
 seconds = int(time.time())
