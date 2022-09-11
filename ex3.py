@@ -8,6 +8,7 @@ from pygame.locals import *
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 GREEN = (0, 255, 0)
+YELLOW = (255, 255, 0)
 MAGENTA = (255, 0, 255)
 GRAY = (150, 150, 150)
 SCREEN = (640,480)
@@ -59,7 +60,9 @@ def start_stop_reaction(event):
 uibox = thorpy.Box(elements=[*buttons, *texts])
 
 # setup some reactions
-first_reaction = thorpy.Reaction(reacts_to=thorpy.constants.THORPY_EVENT, reac_func=start_stop_reaction, event_args={"el": buttons[0], "id": thorpy.constants.EVENT_UNPRESS})
+first_reaction = thorpy.Reaction(reacts_to=thorpy.constants.THORPY_EVENT, \
+                     reac_func=start_stop_reaction, \
+                     event_args={"el": buttons[0], "id": thorpy.constants.EVENT_UNPRESS})
 uibox.add_reaction(first_reaction)
 
 
@@ -74,10 +77,13 @@ uibox.set_topleft((SCREEN[0]-CONTROLS_BOX[0],0))
 
 
 def get_capture(points1, points2, points3):
-    for t in range(0, SCOPE_BOX[0]):
-        points1.append((t, 50*math.sin(t*math.pi/180) + 20*(random.random() - 0.5)))
-        points2.append((t, 50*math.sin(t*math.pi/180) + 20*(random.random() - 0.5)))
-        points3.append((t, points1[t][1]*points2[t][1]))
+    T_DIV = 0.005    # standard scope time/div
+    FREQ = 50.0
+    for s in range(0, SCOPE_BOX[0]):
+        t = T_DIV*10.0*s/SCOPE_BOX[0]
+        points1.append((s, 50.0*math.sin(2.0*math.pi*FREQ*t) + 20.0*(random.random() - 0.5)))
+        points2.append((s, 50.0*math.sin(2.0*math.pi*FREQ*t) + 20.0*(random.random() - 0.5)))
+        points3.append((s, points1[s][1]*points2[s][1]))
     return points1, points2, points3
 
 
@@ -111,8 +117,8 @@ while running:
 
     # regenerate display 
     screen.fill(GRAY)
-    pygame.draw.lines(screen, RED, False, plot1, 2)
-    pygame.draw.lines(screen, BLUE, False, plot2, 2)
+    pygame.draw.lines(screen, GREEN, False, plot1, 2)
+    pygame.draw.lines(screen, YELLOW, False, plot2, 2)
     pygame.draw.lines(screen, MAGENTA, False, plot3, 2)
     uibox.blit()
     # uibox.update()
@@ -123,7 +129,7 @@ while running:
     # refresh the information box every second
     if newtime != seconds:
         seconds = newtime
-        strings[1] = "FPS: " + str(frames)
+        strings[1] = str(frames) + ' wfm/s'
         set_text_strings(texts, strings)
         frames = 0
 
