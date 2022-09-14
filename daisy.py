@@ -3,7 +3,7 @@ import math
 import pygame
 import time
 import random
-from pygame.locals import *
+# from pygame.locals import *
 
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
@@ -47,6 +47,7 @@ for s in range(0,7):
     texts.append(text)
 
 capturing = True
+
 def start_stop_reaction(event):
    global capturing
    if capturing == True:
@@ -56,7 +57,16 @@ def start_stop_reaction(event):
        capturing = True
        strings[0] = 'Running'
 
- 
+
+def about_box_reaction(event):
+   thorpy.launch_blocking_alert(title="This is an about box!",
+                               text="This is the text..",
+                               ok_text="Ok, I've read",
+                               font_size=12,
+                               font_color=(255,0,0))
+
+
+# create the user interface object
 uibox = thorpy.Box(elements=[*buttons, *texts])
 
 # setup some reactions
@@ -65,20 +75,33 @@ first_reaction = thorpy.Reaction(reacts_to=thorpy.constants.THORPY_EVENT, \
                      event_args={"el": buttons[0], "id": thorpy.constants.EVENT_UNPRESS})
 uibox.add_reaction(first_reaction)
 
+second_reaction = thorpy.Reaction(reacts_to=thorpy.constants.THORPY_EVENT, \
+                     reac_func=about_box_reaction, \
+                     event_args={"el": buttons[5], "id": thorpy.constants.EVENT_UNPRESS})
+uibox.add_reaction(second_reaction)
 
 
-menu = thorpy.Menu(uibox) #create a menu for auto events handling
+
+# a menu object is needed for events dispatching
+menu = thorpy.Menu(uibox) 
+
+# set the screen to be the display surface
 for element in menu.get_population():
     element.surface = screen
 
 uibox.set_size(CONTROLS_BOX)
 uibox.set_topleft((SCREEN[0]-CONTROLS_BOX[0],0))
+
+
+# we do not launch the menu because it creates a hidden event loop
+# while we need to have a free running loop in pygame.
 #menu.play() #launch the menu
+
 
 
 def get_capture(points1, points2, points3):
     T_DIV = 0.005    # standard scope time/div
-    FREQ = 50.0
+    FREQ = 60.0
     for s in range(0, SCOPE_BOX[0]):
         t = T_DIV*10.0*s/SCOPE_BOX[0]
         points1.append((s, 50.0*math.sin(2.0*math.pi*FREQ*t) + 20.0*(random.random() - 0.5)))
@@ -107,7 +130,7 @@ while running:
 
     # deal with the event queue
     for event in pygame.event.get():
-        if event.type == QUIT or (event.type == KEYDOWN and event.key == pygame.K_q):
+        if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_q):
             running = False
         menu.react(event)
 
