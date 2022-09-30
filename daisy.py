@@ -1,10 +1,15 @@
+#!/usr/bin/env python3
+
+
 import thorpy
 import math
 import pygame
 import time
 import random
+import sys
 # from pygame.locals import *
 
+CAPTURE_BUFFER = '/tmp/capture_buffer'    # this is a fifo that we read data from
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 GREEN = (0, 255, 0)
@@ -19,9 +24,10 @@ TEXT_SIZE = (100,12)
 
 pygame.init()
 pygame.display.set_caption('pqm-daisy')
-screen = pygame.display.set_mode(SCREEN)
+screen = pygame.display.set_mode(SCREEN, flags=pygame.FULLSCREEN)
 
 strings = ['Running', 'This.', 'is', 'some', 'test text', '12345678']
+texts = []
 
 # update text message strings, called periodically
 def set_text_strings(texts, strings):
@@ -40,13 +46,11 @@ for s in ['Run/Stop', 'Mode', 'Logging', 'Scales', 'Options', 'About']:
     buttons.append(button)
 
 
-texts = []
 for s in range(0,7):
     text = thorpy.make_text('1234567890')
     text.set_size(TEXT_SIZE)
     texts.append(text)
 
-capturing = True
 
 def start_stop_reaction(event):
    global capturing
@@ -66,6 +70,20 @@ def about_box_reaction(event):
                                font_color=(255,0,0))
 
 
+def touch_reaction(event):
+    print("Touched: " + str(event.x) + " " + str(event.y))
+    print("Moving mouse into vicinity of button 0")
+    ev4 = pygame.mouse.set_pos([600,50])
+#    print("Firing mouse hover event into region of button 0")
+#    ev3 = pygame.event.Event(thorpy.constants.THORPY_EVENT, el=buttons[0], id=thorpy.constants.EVENT_HOVER, value=None)
+#    pygame.event.post(ev3)
+#    print("Firing press event into button 0")
+#    ev1 = pygame.event.Event(thorpy.constants.THORPY_EVENT, el=buttons[0], id=thorpy.constants.EVENT_PRESS, value=None)
+#    pygame.event.post(ev1)
+    print("Firing unpress event into button 0")
+    ev2 = pygame.event.Event(thorpy.constants.THORPY_EVENT, el=buttons[0], id=thorpy.constants.EVENT_UNPRESS, value=None)
+    pygame.event.post(ev2)
+
 # create the user interface object
 uibox = thorpy.Box(elements=[*buttons, *texts])
 
@@ -80,6 +98,9 @@ second_reaction = thorpy.Reaction(reacts_to=thorpy.constants.THORPY_EVENT, \
                      event_args={"el": buttons[5], "id": thorpy.constants.EVENT_UNPRESS})
 uibox.add_reaction(second_reaction)
 
+third_reaction = thorpy.Reaction(reacts_to=pygame.FINGERDOWN, \
+                     reac_func=touch_reaction)
+uibox.add_reaction(third_reaction)
 
 
 # a menu object is needed for events dispatching
@@ -96,7 +117,6 @@ uibox.set_topleft((SCREEN[0]-CONTROLS_BOX[0],0))
 # we do not launch the menu because it creates a hidden event loop
 # while we need to have a free running loop in pygame.
 #menu.play() #launch the menu
-
 
 
 def get_capture(points1, points2, points3):
@@ -121,43 +141,79 @@ def to_screen_coordinates(points1, points2, points3):
         plot3.append((t, 250-int(0.05*points3[t][1])))
     return plot1, plot2, plot3
 
+def open_fifo():
+    try:
+        f = open(CAPTURE_BUFFER, "r")
+        return f
+    except:
+        print("Couldn't open the fifo capture_buffer")
+        sys.exit(1)
 
+
+def get_capture_from_file(f):
+    FRAME_LENGTH = 540
+    counter = 0
+    frame = []
+    try:
+        while counter<=FRAME_LENGTH:
+            i, v1, v2, v3, v4 = readline(f).split()
+            frame.append((i,v1,v2,v3,v4)) 
+            counter = counter+1
+    except:
+        print("Couldn't read from capture buffer.")
+    return frame
+
+
+# set up some global flags and variables
 running = True
+capturing = True
 frames = 0
 seconds = int(time.time())
 
-while running:
 
-    # deal with the event queue
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_q):
-            running = False
-        menu.react(event)
-
-    # update line data
-    if capturing:
-        plot1, plot2, plot3 = to_screen_coordinates(*get_capture([],[],[]))
-
-    # regenerate display 
-    screen.fill(GRAY)
-    pygame.draw.lines(screen, GREEN, False, plot1, 2)
-    pygame.draw.lines(screen, YELLOW, False, plot2, 2)
-    pygame.draw.lines(screen, MAGENTA, False, plot3, 2)
-    uibox.blit()
-    # uibox.update()
+def main():
+    global running, capturing, frames, seconds
     
-    frames = frames + 1
-    newtime = int(time.time())
+#    f = open_fifo()
 
-    # refresh the information box every second
-    if newtime != seconds:
-        seconds = newtime
-        strings[1] = str(frames) + ' wfm/s'
-        set_text_strings(texts, strings)
-        frames = 0
+    while running:
+
+        # deal with the event queue
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_q):
+                running = False
+            menu.react(event)
+
+        # update line data
+        if capturing:
+            plot1, plot2, plot3 = to_screen_coordinates(*get_capture([],[],[]))
+
+        # regenerate display 
+        screen.fill(GRAY)
+        pygame.draw.lines(screen, GREEN, False, plot1, 2)
+        pygame.draw.lines(screen, YELLOW, False, plot2, 2)
+        pygame.draw.lines(screen, MAGENTA, False, plot3, 2)
+        uibox.blit()
+        # uibox.update()
+    
+        frames = frames + 1
+        new_seconds = int(time.time())
+
+        # refresh the information box every second
+        if new_seconds != seconds:
+            seconds = new_seconds
+            strings[1] = str(frames) + ' wfm/s'
+            set_text_strings(texts, strings)
+            frames = 0
 
 
-    pygame.display.update()
+        pygame.display.update()
 
-pygame.quit()
+    pygame.quit()
+
+
+
+if __name__ == '__main__':
+    main()
+
 
