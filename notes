@@ -1,3 +1,4 @@
 pip3 install thorpy pygame
 http://www.thorpy.org/documentation/userguide/elements.html
+Raspbian may need sudo apt install libsdl2-mixer-2.0-0
 
