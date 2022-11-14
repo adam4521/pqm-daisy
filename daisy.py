@@ -24,7 +24,8 @@ TEXT_SIZE = (100,12)
 
 pygame.init()
 pygame.display.set_caption('pqm-daisy')
-screen = pygame.display.set_mode(SCREEN, flags=pygame.FULLSCREEN)
+screen = pygame.display.set_mode(SCREEN)
+#screen = pygame.display.set_mode(SCREEN, flags=pygame.FULLSCREEN)
 
 strings = ['Running', 'This.', 'is', 'some', 'test text', '12345678']
 texts = []
