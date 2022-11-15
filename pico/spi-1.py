@@ -18,7 +18,7 @@ reset_adc = machine.Pin(5, Pin.OUT)
 dr_adc = machine.Pin(4, Pin.IN)
 
 
-spi = machine.SPI(0,
+spi_adc = machine.SPI(0,
                   baudrate = 1000000,
                   polarity = 0,
                   phase = 0,
@@ -37,33 +37,20 @@ def write_text(spi, cs, text):
     spi.write(message)
     cs.value(1)
     
-def write_bytes(spi, cs, data):
+def write_bytes(spi, cs, bs):
     # send the message on the bus    
     cs.value(0)
-    spi.write(data)
+    spi.write(bs)
     cs.value(1)
         
-def write_and_read_bytes(spi, cs, data, nbytes):
+def write_and_read_bytes(spi, cs, bs, n):
     cs.value(0)
-    spi.write(data)
-    result = spi.read(nbytes)
+    spi.write(bs)
+    obs = spi.read(n)
     cs.value(1)
-    return result
+    return obs
 
-def read_adc(cs, ch):
-    cs.value(0)
-    if ch == 0:
-        spi.write(bytes([0b01000001]))
-    elif ch == 1:
-        spi.write(bytes([0b01000011]))
-    elif ch == 2:
-        spi.write(bytes([0b01000101]))
-    elif ch == 3:
-        spi.write(bytes([0b01000111]))
 
-    result = spi.read(3)
-    cs.value(1)
-    return result  # readings are in big-endian format
 
 # convert two's complement 24 bit binary to signed integer
 def binary_to_signed_int(bs):
@@ -76,61 +63,89 @@ def binary_to_signed_int(bs):
         result = int.from_bytes(bs, 'big')
     return result
 
-# deselect the adc
-cs_adc.value(1)
-
-# Setup the MC3912 ADC
-# Set the gain configuration register 0x0b
-print("Setting gain register 0x0b to 0x00.")
-write_bytes(spi, cs_adc, bytes([0b01010110,0b0]))
-bs = write_and_read_bytes(spi, cs_adc, bytes([0b01010111]), 3)
-print("Verify: " + " ".join(hex(b) for b in bs))
-time.sleep(1)
-                        
-# Set the status and communication register 0x0c
-print("Setting status and communication register 0x0c to 0x89, 0x00, 0x0f.")
-write_bytes(spi, cs_adc, bytes([0b01011000,0b10001001,0b00000000,0b00001111]))
-bs = write_and_read_bytes(spi, cs_adc, bytes([0b01011001]), 3)
-print("Verify: " + " ".join(hex(b) for b in bs))
-time.sleep(1)
-
-# Set the configuration register CONFIG0 at 0x0d
-print("Setting configuration register CONFIG0 at 0x0d to 0x5a, 0x38, 0x50.")
-write_bytes(spi, cs_adc, bytes([0b01011010,0b00111000,0b00100000,0x50]))
-bs = write_and_read_bytes(spi, cs_adc, bytes([0b01011011]), 3)
-print("Verify: " + " ".join(hex(b) for b in bs))
-time.sleep(1)
-
-# Set the configuration register CONFIG1 at 0x0e
-print("Setting configuration register CONFIG0 at 0x0e to 0x00, 0x00, 0x00.")
-write_bytes(spi, cs_adc, bytes([0b01011100,0b00000000,0b00000000,0b00000000]))
-bs = write_and_read_bytes(spi, cs_adc, bytes([0b01011101]), 3)
-print("Verify: " + " ".join(hex(b) for b in bs))
-time.sleep(1)
-
-
-
-# Attempt to read from ADCs
-i = 0
-while True:
-    # sync to next sample by waiting until DR pin is low
-    while dr_adc.value() == 1:
-        1   # (do nothing) 
-    ch0 = read_adc(cs_adc, 0)
-    ch1 = read_adc(cs_adc, 1)
-    ch2 = read_adc(cs_adc, 2)
-    ch3 = read_adc(cs_adc, 3)
-    raw0 = int.from_bytes(ch0, 'big')
-    raw1 = int.from_bytes(ch1, 'big')
-    raw2 = int.from_bytes(ch2, 'big')
-    raw3 = int.from_bytes(ch3, 'big')
-    dec0 = binary_to_signed_int(ch0)
-    dec1 = binary_to_signed_int(ch1)
-    dec2 = binary_to_signed_int(ch2)
-    dec3 = binary_to_signed_int(ch3)
-    if i % 1000 == 0:
-        boardled.toggle()
-        print(f"Readings HEX:   {raw0:06x}   {raw1:06x}   {raw2:06x}   {raw3:06x}")
-        print(f"Readings DEC: {dec0:8d} {dec1:8d} {dec2:8d} {dec3:8d}")
-    i = i + 1
+def set_and_verify_adc_register(spi, cs, reg, bs):
+    # The actual address byte leads with binary 01 and ends with the read/write bit (1 or 0).
+    # The five bits in the middle are the 'register' address
+    addr = 0x40 | (reg << 1)
+    # for writing, make sure lowest bit is cleared
+    write_bytes(spi, cs, bytes([(addr & 0b11111110)]) + bs)
+    # for reading, make sure lowest bit is set
+    obs = write_and_read_bytes(spi, cs, bytes([(addr | 0b00000001)]) + bs, len(bs))
+    print("Verify: " + " ".join(hex(b) for b in obs))
     
+
+def setup_adc(spi, cs):
+    # Setup the MC3912 ADC
+    # Set the gain configuration register 0x0b
+    print("Setting gain register 0x0b to 0x00, 0x00, 0x00.")
+    set_and_verify_adc_register(spi, cs, 0x0b, bytes([0x00,0x00,0x00]))
+    time.sleep(1)
+    
+    # Set the status and communication register 0x0c
+    print("Setting status and communication register 0x0c to 0x89, 0x00, 0x0f.")
+    set_and_verify_adc_register(spi, cs, 0x0c, bytes([0x89,0x00,0x0f]))
+    time.sleep(1)
+
+    # Set the configuration register CONFIG0 at 0x0d
+    print("Setting configuration register CONFIG0 at 0x0d to 0x5a, 0x38, 0x50.")
+    set_and_verify_adc_register(spi, cs, 0x0d, bytes([0x5a,0x38,0x50]))
+    time.sleep(1)
+
+    # Set the configuration register CONFIG1 at 0x0e
+    print("Setting configuration register CONFIG0 at 0x0e to 0x00, 0x00, 0x00.")
+    set_and_verify_adc_register(spi, cs, 0x0e, bytes([0x00,0x00,0x00]))
+    time.sleep(1)
+    
+def read_adc(spi, cs, ch):
+    cs.value(0)
+    if ch == 0:
+        spi.write(bytes([0b01000001]))
+    elif ch == 1:
+        spi.write(bytes([0b01000011]))
+    elif ch == 2:
+        spi.write(bytes([0b01000101]))
+    elif ch == 3:
+        spi.write(bytes([0b01000111]))
+    result = spi.read(3)
+    cs.value(1)
+    return result  # readings are in big-endian format
+
+def read_adcs(spi, cs, dr):
+        # sync to next sample by waiting until DR pin is low
+        while dr.value() == 1:
+            1   # (do nothing)
+        # now read each ADC register
+        ch = [0,0,0,0]
+        raw = [0,0,0,0]
+        signed_int = [0,0,0,0]
+        for i in range(0,4):
+            ch[i] = read_adc(spi, cs, i)
+            raw[i] = int.from_bytes(ch[i], 'big')
+            signed_int[i] = binary_to_signed_int(ch[i])
+        return (raw, signed_int)
+    
+
+def main():
+    # deselect the ADC
+    cs_adc.value(1)
+
+    # configure the ADC
+    setup_adc(spi_adc, cs_adc)
+    
+    # Now repeatedly read from ADCs
+    i = 0
+    while True:
+        r, s = read_adcs(spi_adc, cs_adc, dr_adc)
+        # indicate and print every 1000 readings
+        if i % 1000 == 0:
+            boardled.toggle()
+            print(f"Readings HEX:   {r[0]:06x}   {r[1]:06x}   {r[2]:06x}   {r[3]:06x}")
+            print(f"Readings DEC: {s[0]:8d} {s[1]:8d} {s[2]:8d} {s[3]:8d}")
+        i = i + 1
+    
+
+# run from here
+if __name__ == '__main__':
+    main()
+
+
