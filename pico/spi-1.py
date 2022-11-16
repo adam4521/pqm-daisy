@@ -4,6 +4,7 @@ import machine
 import utime
 import ustruct
 import sys
+import gc
 from machine import Pin
 
 
@@ -19,7 +20,7 @@ dr_adc = machine.Pin(4, Pin.IN)
 
 
 spi_adc = machine.SPI(0,
-                  baudrate = 1000000,
+                  baudrate = 4000000,
                   polarity = 0,
                   phase = 0,
                   bits = 8,
@@ -85,8 +86,8 @@ def setup_adc(spi, cs, reset):
     time.sleep(1)
     
     # Set the status and communication register 0x0c
-    print("Setting status and communication register 0x0c to 0x89, 0x00, 0x0f.")
-    set_and_verify_adc_register(spi, cs, 0x0c, bytes([0x89,0x00,0x0f]))
+    print("Setting status and communication register 0x0c to 0xa9, 0x00, 0x0f.")
+    set_and_verify_adc_register(spi, cs, 0x0c, bytes([0xa9,0x00,0x0f]))
     time.sleep(1)
 
     # Set the configuration register CONFIG0 at 0x0d
@@ -124,9 +125,22 @@ def read_adcs(spi, cs, dr):
     for i in range(0,4):
         ch[i] = read_adc(spi, cs, i)
         raw[i] = int.from_bytes(ch[i], 'big')
-        signed_int[i] = binary_to_signed_int(ch[i])
+        # lowest 4 bits of raw values are zero padded, remove them for decimal presentation
+        signed_int[i] = binary_to_signed_int(ch[i]) >> 4
     return (raw, signed_int)
     
+def read_all_adcs(spi, cs, dr):
+    # wait until DR pin is low
+    while dr.value() == 1:
+        1  # do nothing
+    # operate the bus
+    cs.value(0)
+    spi.write(bytes([0b01000001]))
+    acq = spi.read(12)   # bring back all readings (12 bytes)
+    cs.value(1)
+    return acq
+
+
 def value_gauge(v, low, high):
     # scale readings over 50 characters
     out = '|'
@@ -139,21 +153,36 @@ def value_gauge(v, low, high):
     out = out + '|'
     return out
 
+def convert_to_channels(acq):
+    raw = [0,0,0,0]
+    signed_int = [0,0,0,0]
+    # split up and process the readings
+    for i in range(0,4):
+        ch = acq[i*3:i*3+3]
+        raw[i] = int.from_bytes(ch, 'big')
+        # lowest 4 bits of raw values are zero padded, remove them for decimal presentation
+        signed_int[i] = binary_to_signed_int(ch) >> 4
+    return (raw, signed_int)           
+
+
 def main():
    # configure the ADC
     setup_adc(spi_adc, cs_adc, reset_adc)
     
     # Now repeatedly read from ADCs
     i = 0
+    gc.disable()   #  disable automatic garbage collection to improve performance
     while True:
-        r, s = read_adcs(spi_adc, cs_adc, dr_adc)
-        # indicate and print every 1000 readings
+        acq = read_all_adcs(spi_adc, cs_adc, dr_adc)
+        # indicate and print every 100 readings
         if i % 100 == 0:
+            # convert to signed integers
             boardled.toggle()
+            r, s = convert_to_channels(acq)
             print(f"Readings HEX:   {r[0]:06x}   {r[1]:06x}   {r[2]:06x}   {r[3]:06x}")
-#            print(f"Readings DEC: {s[0]:8d} {s[1]:8d} {s[2]:8d} {s[3]:8d}")
             for j in range(0,4):
-                print(value_gauge(s[j], -8388608, 8388608) + f' {s[j]:8d}')
+                print(f'CH{j} ' + value_gauge(s[j], -524288, 524287) + f' {s[j]:8d}')
+            gc.collect()  # manual collection
         i = i + 1
     
 
