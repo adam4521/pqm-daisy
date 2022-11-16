@@ -37,15 +37,14 @@ def write_text(spi, cs, text):
     spi.write(message)
     cs.value(1)
     
-def write_bytes(spi, cs, bs):
-    # send the message on the bus    
+def write_bytes(spi, cs, addr, bs):
     cs.value(0)
-    spi.write(bs)
+    spi.write(bytes([addr & 0b11111110]) + bs) # for writing, make sure lowest bit is cleared
     cs.value(1)
         
-def write_and_read_bytes(spi, cs, bs, n):
+def read_bytes(spi, cs, addr, n):
     cs.value(0)
-    spi.write(bs)
+    spi.write(bytes([addr | 0b00000001])) # for reading, make sure lowest bit is set
     obs = spi.read(n)
     cs.value(1)
     return obs
@@ -54,28 +53,32 @@ def write_and_read_bytes(spi, cs, bs, n):
 
 # convert two's complement 24 bit binary to signed integer
 def binary_to_signed_int(bs):
-    if bs[0] & 1<<7 == True:    # negative number if most significant bit is set
-        # flip all the bits and add 1 to answer
-        for b in bs:
-            b = ~b
-        result = - (int.from_bytes(bs, 'big') + 1)
-    else:
-        result = int.from_bytes(bs, 'big')
-    return result
+    v = int.from_bytes(bs, 'big')
+    if bs[0] & (1<<7):    # negative number if most significant bit is set
+        # adjust for negative number
+        v = v - (1 << len(bs)*8)
+    return v
 
 def set_and_verify_adc_register(spi, cs, reg, bs):
     # The actual address byte leads with binary 01 and ends with the read/write bit (1 or 0).
     # The five bits in the middle are the 'register' address
     addr = 0x40 | (reg << 1)
-    # for writing, make sure lowest bit is cleared
-    write_bytes(spi, cs, bytes([(addr & 0b11111110)]) + bs)
-    # for reading, make sure lowest bit is set
-    obs = write_and_read_bytes(spi, cs, bytes([(addr | 0b00000001)]) + bs, len(bs))
+    write_bytes(spi, cs, addr, bs)
+    obs = read_bytes(spi, cs, addr, len(bs))
     print("Verify: " + " ".join(hex(b) for b in obs))
     
 
-def setup_adc(spi, cs):
+def setup_adc(spi, cs, reset):
     # Setup the MC3912 ADC
+    # deselect the ADC
+    cs_adc.value(1)
+    
+    # reset the adc
+    reset_adc.value(0)
+    time.sleep(0.1)
+    reset_adc.value(1)
+    time.sleep(0.1)
+   
     # Set the gain configuration register 0x0b
     print("Setting gain register 0x0b to 0x00, 0x00, 0x00.")
     set_and_verify_adc_register(spi, cs, 0x0b, bytes([0x00,0x00,0x00]))
@@ -111,36 +114,46 @@ def read_adc(spi, cs, ch):
     return result  # readings are in big-endian format
 
 def read_adcs(spi, cs, dr):
-        # sync to next sample by waiting until DR pin is low
-        while dr.value() == 1:
-            1   # (do nothing)
-        # now read each ADC register
-        ch = [0,0,0,0]
-        raw = [0,0,0,0]
-        signed_int = [0,0,0,0]
-        for i in range(0,4):
-            ch[i] = read_adc(spi, cs, i)
-            raw[i] = int.from_bytes(ch[i], 'big')
-            signed_int[i] = binary_to_signed_int(ch[i])
-        return (raw, signed_int)
+    # sync to next sample by waiting until DR pin is low
+    while dr.value() == 1:
+        1   # (do nothing)
+    # now read each ADC register
+    ch = [0,0,0,0]
+    raw = [0,0,0,0]
+    signed_int = [0,0,0,0]
+    for i in range(0,4):
+        ch[i] = read_adc(spi, cs, i)
+        raw[i] = int.from_bytes(ch[i], 'big')
+        signed_int[i] = binary_to_signed_int(ch[i])
+    return (raw, signed_int)
     
+def value_gauge(v, low, high):
+    # scale readings over 50 characters
+    out = '|'
+    v_pos = round((v - low)/(high - low) * 50)
+    for i in range(0, v_pos):
+        out = out + '-'
+    out = out + '>'
+    for i in range(v_pos+1, 51):
+        out = out + ' '
+    out = out + '|'
+    return out
 
 def main():
-    # deselect the ADC
-    cs_adc.value(1)
-
-    # configure the ADC
-    setup_adc(spi_adc, cs_adc)
+   # configure the ADC
+    setup_adc(spi_adc, cs_adc, reset_adc)
     
     # Now repeatedly read from ADCs
     i = 0
     while True:
         r, s = read_adcs(spi_adc, cs_adc, dr_adc)
         # indicate and print every 1000 readings
-        if i % 1000 == 0:
+        if i % 100 == 0:
             boardled.toggle()
             print(f"Readings HEX:   {r[0]:06x}   {r[1]:06x}   {r[2]:06x}   {r[3]:06x}")
-            print(f"Readings DEC: {s[0]:8d} {s[1]:8d} {s[2]:8d} {s[3]:8d}")
+#            print(f"Readings DEC: {s[0]:8d} {s[1]:8d} {s[2]:8d} {s[3]:8d}")
+            for j in range(0,4):
+                print(value_gauge(s[j], -8388608, 8388608) + f' {s[j]:8d}')
         i = i + 1
     
 
